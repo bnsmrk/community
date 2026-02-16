@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vins Community</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366f1',
+                        bgLight: '#f3f4f6',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .canvas-bg {
+            background-image: radial-gradient(#d1d5db 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        canvas {
+            image-rendering: pixelated;
+            max-width: 100%;
+            height: auto !important;
+        }
+
+        #chat-messages::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #chat-messages::-webkit-scrollbar-thumb {
+            background-color: #e5e7eb;
+            border-radius: 10px;
+        }
+
+        .key-active {
+            border-color: #000 !important;
+            background-color: #e5e7eb !important;
+            color: #000 !important;
+            transform: scale(0.95);
+        }
+
+        @media (max-width: 768px) {
+            body {
+                overflow-y: auto !important;
+                height: auto !important;
+            }
+
+            #game-container {
+                flex-direction: column;
+                height: auto;
+            }
+
+            .sidebar-area {
+                order: 2;
+                width: 100% !important;
+            }
+
+            .canvas-area {
+                order: 1;
+                min-height: 350px;
+            }
+        }
+    </style>
+</head>
+
+<body class="md:h-screen w-screen overflow-x-hidden flex flex-col p-4 md:p-6 gap-4 font-sans antialiased">
+
+    <div id="server-status"
+        class="fixed top-3 right-3 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm bg-red-100 text-red-800 z-50 transition-colors">
+        OFFLINE
+    </div>
+
+    <div id="setup-screen" class="fixed inset-0 flex items-center justify-center bg-white/80 backdrop-blur-md z-[60]">
+        <div class="bg-white rounded-3xl shadow-2xl border border-gray-100 p-8 w-full max-w-md mx-4 text-center">
+            <h1 class="text-2xl font-bold text-gray-900 mb-6">Join Community</h1>
+            <div class="space-y-4">
+                <input id="username" type="text" placeholder="Your name..." maxlength="14"
+                    class="w-full px-4 py-3 border rounded-xl outline-none focus:ring-2 focus:ring-primary/20" />
+                <select id="nameColor" class="w-full px-4 py-3 border rounded-xl bg-white outline-none">
+                    <option value="#6366f1">Indigo</option>
+                    <option value="#ec4899">Pink</option>
+                    <option value="#10b981">Emerald</option>
+                    <option value="#f59e0b">Amber</option>
+                </select>
+                <button onclick="startGame()"
+                    class="w-full bg-black text-white font-bold py-3 rounded-xl hover:opacity-90 transition active:scale-95">Enter</button>
+            </div>
+        </div>
+    </div>
+
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center px-2 shrink-0 gap-2">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Vins Community</h1>
+            <div class="flex items-center gap-2 mt-1 text-[10px] md:text-xs text-gray-400 font-medium tracking-wider">
+                <button onclick="logout()" class="border rounded px-2 py-0.5 bg-white hover:bg-gray-50 text-gray-600">👤
+                    Profile</button>
+                <span>•</span>
+                <span id="live-clock">--:--</span>
+                <span class="hidden md:inline">•</span>
+                <span id="live-date" class="hidden md:inline">---</span>
+            </div>
+        </div>
+    </header>
+
+    <main id="game-container" class="hidden flex-1 flex flex-col md:flex-row gap-6 min-h-0">
+        <div class="sidebar-area w-full md:w-80 flex flex-col gap-4 shrink-0">
+            <div
+                class="h-80 md:flex-1 bg-white rounded-[2rem] border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+                <div class="px-6 py-4 border-b font-bold text-gray-800">Chat</div>
+                <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-3 text-sm"></div>
+                <form id="chat-form" class="p-4 border-t flex gap-2">
+                    <input id="chat-input" type="text" placeholder="Type a message..."
+                        class="flex-1 bg-gray-100 rounded-xl px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" />
+                </form>
+            </div>
+
+            <div class="bg-white rounded-[2rem] border border-gray-200 shadow-sm p-6 flex flex-col shrink-0">
+                <span class="text-[10px] font-bold text-gray-300 uppercase tracking-widest mb-4">Input Guide</span>
+                <div class="flex flex-col items-center gap-3">
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <div></div>
+                        <div id="key-w"
+                            class="w-10 h-10 border border-gray-100 rounded-xl flex items-center justify-center font-bold text-gray-400 text-xs bg-gray-50 transition-all">
+                            W</div>
+                        <div></div>
+                        <div id="key-a"
+                            class="w-10 h-10 border border-gray-100 rounded-xl flex items-center justify-center font-bold text-gray-400 text-xs bg-gray-50 transition-all">
+                            A</div>
+                        <div id="key-s"
+                            class="w-10 h-10 border border-gray-100 rounded-xl flex items-center justify-center font-bold text-gray-400 text-xs bg-gray-50 transition-all">
+                            S</div>
+                        <div id="key-d"
+                            class="w-10 h-10 border border-gray-100 rounded-xl flex items-center justify-center font-bold text-gray-400 text-xs bg-gray-50 transition-all">
+                            D</div>
+                    </div>
+                    <p class="text-[10px] text-gray-400 text-center">Touch/Drag on Playground or use Keys</p>
+                </div>
+            </div>
+        </div>
+
+        <div
+            class="canvas-area flex-1 bg-white rounded-[2rem] md:rounded-[2.5rem] border border-gray-200 shadow-sm relative overflow-hidden flex flex-col">
+            <div class="flex-1 canvas-bg relative flex items-center justify-center bg-slate-50 overflow-hidden">
+                <canvas id="gameCanvas" width="960" height="640" class="shadow-sm"></canvas>
+                <div
+                    class="absolute top-4 right-4 border border-dashed border-gray-300 p-2 md:p-4 text-center rounded-xl bg-white/40 pointer-events-none">
+                    <p class="text-[9px] font-bold text-gray-400">PLAYGROUND</p>
+                </div>
+            </div>
+            <div class="p-3 text-center border-t border-gray-100 text-[10px] text-gray-400">
+                Mention <span class="font-bold text-gray-600">@vins</span> for a reply.
+            </div>
+        </div>
+    </main>
+
+    <footer
+        class="flex justify-between px-2 text-[9px] md:text-[10px] font-bold text-gray-300 uppercase tracking-widest shrink-0">
+        <div id="player-count">0 online</div>
+        <div id="latency">0ms</div>
+    </footer>
+
+    <script>
+        const socket = io('http://localhost:3000');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const chatInput = document.getElementById('chat-input');
+        const statusEl = document.getElementById('server-status');
+
+        const playerSprite = new Image();
+        playerSprite.src = 'images/Ivory/walk.png';
+
+        const player = {
+            x: 480, y: 320, width: 64, height: 64, speed: 4,
+            frameX: 0, frameY: 2, moving: false, animCount: 0,
+            name: "Guest", labelColor: "#6366f1", chatMessage: null
+        };
+
+        const obstacles = [
+            { x: 120, y: 120, w: 140, h: 70 },
+            { x: 420, y: 260, w: 120, h: 60 },
+            { x: 660, y: 140, w: 180, h: 120 }
+        ];
+
+        let otherPlayers = {};
+        const keys = {};
+        let isTyping = false;
+
+        socket.on('connect', () => {
+            statusEl.textContent = "ONLINE";
+            statusEl.classList.replace('bg-red-100', 'bg-green-100');
+            statusEl.classList.replace('text-red-800', 'text-green-800');
+        });
+
+        socket.on('update-players', (users) => {
+            delete users?.[socket.id];
+            otherPlayers = users || {};
+            document.getElementById('player-count').textContent = `${Object.keys(otherPlayers).length + 1} online`;
+        });
+
+        socket.on('player-moved', data => { if (otherPlayers[data.id]) Object.assign(otherPlayers[data.id], data); });
+
+        socket.on('receive-chat', ({ id, name, color, message }) => {
+            const target = (id === socket.id) ? player : otherPlayers[id];
+            if (target) target.chatMessage = { text: message, time: Date.now() };
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = "break-words";
+            msgDiv.innerHTML = `<span class="font-bold" style="color:${color}">${name}:</span> <span class="text-gray-700">${message}</span>`;
+            const box = document.getElementById('chat-messages');
+            box.appendChild(msgDiv);
+            box.scrollTop = box.scrollHeight;
+        });
+
+        function checkCollision(nx, ny) {
+            if (nx < 0 || nx + player.width > canvas.width || ny < 0 || ny + player.height > canvas.height) return true;
+            for (let obs of obstacles) {
+                if (nx + 20 < obs.x + obs.w && nx + player.width - 20 > obs.x && ny + 45 < obs.y + obs.h && ny + player.height > obs.y) return true;
+            }
+            return false;
+        }
+
+        function update() {
+            const keyMap = { 'w': 'key-w', 'arrowup': 'key-w', 'a': 'key-a', 'arrowleft': 'key-a', 's': 'key-s', 'arrowdown': 'key-s', 'd': 'key-d', 'arrowright': 'key-d' };
+            document.querySelectorAll('[id^="key-"]').forEach(el => el.classList.remove('key-active'));
+            Object.keys(keys).forEach(k => { if (keys[k] && keyMap[k]) document.getElementById(keyMap[k]).classList.add('key-active'); });
+
+            if (isTyping) return;
+
+            let nx = player.x, ny = player.y, moved = false;
+            if (keys['w'] || keys['arrowup']) { ny -= player.speed; player.frameY = 0; moved = true; }
+            if (keys['s'] || keys['arrowdown']) { ny += player.speed; player.frameY = 2; moved = true; }
+            if (keys['a'] || keys['arrowleft']) { nx -= player.speed; player.frameY = 1; moved = true; }
+            if (keys['d'] || keys['arrowright']) { nx += player.speed; player.frameY = 3; moved = true; }
+
+            if (moved && !checkCollision(nx, ny)) {
+                player.x = nx; player.y = ny;
+                player.animCount++;
+                if (player.animCount % 10 === 0) player.frameX = (player.frameX + 1) % 8;
+                socket.emit('move', { x: player.x, y: player.y, frameX: player.frameX, frameY: player.frameY });
+            } else if (!moved) {
+                player.frameX = 0;
+            }
+        }
+
+        function drawPlayer(p) {
+            ctx.fillStyle = p.labelColor;
+            ctx.font = "bold 14px sans-serif";
+            ctx.textAlign = "center";
+            const tw = ctx.measureText(p.name).width;
+            ctx.beginPath();
+            ctx.roundRect(p.x + 32 - tw / 2 - 8, p.y - 22, tw + 16, 22, 8);
+            ctx.fill();
+            ctx.fillStyle = "white";
+            ctx.fillText(p.name, p.x + 32, p.y - 8);
+
+            if (playerSprite.complete) {
+                ctx.drawImage(playerSprite, p.frameX * 64, p.frameY * 64, 64, 64, p.x, p.y, 64, 64);
+            }
+
+            if (p.chatMessage && Date.now() - p.chatMessage.time < 5000) {
+                const mw = ctx.measureText(p.chatMessage.text).width;
+                ctx.fillStyle = "rgba(0,0,0,0.75)";
+                ctx.beginPath();
+                ctx.roundRect(p.x + 32 - mw / 2 - 10, p.y - 52, mw + 20, 26, 6);
+                ctx.fill();
+                ctx.fillStyle = "white";
+                ctx.font = "12px sans-serif";
+                ctx.fillText(p.chatMessage.text, p.x + 32, p.y - 34);
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#d1d5db";
+            obstacles.forEach(o => ctx.fillRect(o.x, o.y, o.w, o.h));
+            Object.values(otherPlayers).forEach(drawPlayer);
+            drawPlayer(player);
+            update();
+            requestAnimationFrame(draw);
+        }
+
+        function startGame() {
+            const name = document.getElementById('username').value.trim();
+            if (!name) return alert("Enter a name");
+            player.name = name;
+            player.labelColor = document.getElementById('nameColor').value;
+            localStorage.setItem('plaza_name', player.name);
+            localStorage.setItem('plaza_color', player.labelColor);
+            initGame();
+        }
+
+        function initGame() {
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('game-container').classList.remove('hidden');
+            socket.emit('join-room', { name: player.name, labelColor: player.labelColor, x: player.x, y: player.y });
+            draw();
+        }
+
+        function logout() { localStorage.clear(); location.reload(); }
+
+        window.onload = () => {
+            const savedName = localStorage.getItem('plaza_name');
+            if (savedName) {
+                player.name = savedName;
+                player.labelColor = localStorage.getItem('plaza_color') || "#6366f1";
+                initGame();
+            }
+            setInterval(() => {
+                const now = new Date();
+                document.getElementById('live-clock').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('live-date').textContent = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+            }, 1000);
+        };
+
+        window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; if (e.key === '/') { e.preventDefault(); chatInput.focus(); } });
+        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+        chatInput.addEventListener('focus', () => isTyping = true);
+        chatInput.addEventListener('blur', () => isTyping = false);
+        document.getElementById('chat-form').onsubmit = (e) => {
+            e.preventDefault();
+            const msg = chatInput.value.trim();
+            if (msg) { socket.emit('send-chat', msg); chatInput.value = ''; chatInput.blur(); }
+        };
+    </script>
+</body>
+
+</html>
